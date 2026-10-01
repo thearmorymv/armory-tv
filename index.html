@@ -26,6 +26,8 @@
     border: 0; background: #000; transition: opacity 1s ease;
   }
   iframe.hidden { opacity: 0; pointer-events: none; }
+  /* Invisible layer over the slides: one click or remote OK press = full screen */
+  #fs { position: absolute; inset: 0; z-index: 5; background: transparent; }
   #status {
     position: absolute; left: 16px; bottom: 16px; z-index: 10;
     font: 16px/1.4 system-ui, sans-serif; color: #fff;
@@ -34,7 +36,22 @@
 </style>
 </head>
 <body>
+<div id="fs"></div>
 <div id="status"></div>
+<script>
+  // One click or remote OK press puts the page in full screen (hides browser bars).
+  function goFullscreen() {
+    var el = document.documentElement;
+    var req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+    if (req && !document.fullscreenElement && !document.webkitFullscreenElement) {
+      try { var p = req.call(el); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+    }
+  }
+  document.getElementById("fs").addEventListener("click", goFullscreen);
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" || e.keyCode === 13) goFullscreen();
+  });
+</script>
 <script>
   // ===== SETTINGS =====
   // Published deck ID: the part between /d/e/ and /pub in the Google Slides published link.
