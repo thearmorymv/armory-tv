@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Armory TV</title>
+<!--
+  THE ARMORY TV PLAYER
+  Shows the published Google Slides deck full screen and pulls in edits on its own.
+
+  HOW IT WORKS
+  - Every REFRESH_MINUTES it loads a fresh copy of the deck in the background,
+    then swaps it in once loaded. No black flash.
+  - Before refreshing, it checks the internet. If Wi-Fi is down, it keeps
+    showing the current slides and tries again next cycle. The screen never goes blank.
+  - Once a day (DAILY_RELOAD_HOUR) it fully reloads the page to keep the TV browser fresh.
+
+  TO CHANGE SETTINGS: edit the three values below.
+  TO TEST: add ?debug=1&refresh=1 to the page address. Shows a status
+  label and refreshes every 1 minute.
+-->
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; cursor: none; }
+  iframe {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    border: 0; background: #000; transition: opacity 1s ease;
+  }
+  iframe.hidden { opacity: 0; pointer-events: none; }
+  #status {
+    position: absolute; left: 16px; bottom: 16px; z-index: 10;
+    font: 16px/1.4 system-ui, sans-serif; color: #fff;
+    background: rgba(0,0,0,.7); padding: 8px 12px; border-radius: 6px; display: none;
+  }
+</style>
+</head>
+<body>
+<div id="status"></div>
+<script>
+  // ===== SETTINGS =====
+  // Published deck ID: the part between /d/e/ and /pub in the Google Slides published link.
+  var DECK_ID = "2PACX-1vTXq5odAD8amVjBLPE2Mtw-RaAp5Q3ZOCDrrdpJmfQfB-BqAPNPyKcaveK59Q3Etw";
+  var SECONDS_PER_SLIDE = 10;
+  var REFRESH_MINUTES = 30;   // how often edits are pulled in
+  var DAILY_RELOAD_HOUR = 5;  // 5 = 5:00 AM full page reload
+  // ====================
+
+  var params = new URLSearchParams(location.search);
+  var debug = params.get("debug") === "1";
+  if (params.get("refresh")) REFRESH_MINUTES = Math.max(1, parseFloat(params.get("refresh")) || REFRESH_MINUTES);
+
+  var statusEl = document.getElementById("status");
+  if (debug) statusEl.style.display = "block";
+  function status(msg) {
+    if (debug) statusEl.textContent = msg + " (" + new Date().toLocaleTimeString() + ")";
+  }
+
+  function deckUrl() {
+    return "https://docs.google.com/presentation/d/e/" + DECK_ID +
+      "/embed?start=true&loop=true&delayms=" + (SECONDS_PER_SLIDE * 1000) +
+      "&rm=minimal&_=" + Date.now(); // the timestamp forces a fresh copy
+  }
+
+  var current = null;
+
+  function makeFrame() {
+    var f = document.createElement("iframe");
+    f.className = "hidden";
+    f.setAttribute("allow", "autoplay; fullscreen");
+    f.setAttribute("allowfullscreen", "");
+    f.title = "The Armory specials";
+    return f;
+  }
+
+  function loadFresh() {
+    var next = makeFrame();
+    var done = false;
+    next.onload = function () {
+      if (done) return; done = true;
+      // Give the slideshow a moment to render, then fade it in over the old one.
+      setTimeout(function () {
+        next.classList.remove("hidden");
+        var old = current;
+        current = next;
+        if (old) setTimeout(function () { old.remove(); }, 1500);
+        status("Updated");
+      }, 2000);
+    };
+    next.src = deckUrl();
+    document.body.appendChild(next);
+    // If the new copy never loads, discard it and keep the current one.
+    setTimeout(function () {
+      if (!done) { done = true; next.remove(); status("Load timed out, kept current slides"); }
+    }, 60000);
+  }
+
+  // Only refresh if the internet is reachable, so a Wi-Fi drop never blanks the screen.
+  function online() {
+    if (navigator.onLine === false) return Promise.resolve(false);
+    return fetch("https://docs.google.com/favicon.ico?_=" + Date.now(), { mode: "no-cors", cache: "no-store" })
+      .then(function () { return true; })
+      .catch(function () { return false; });
+  }
+
+  function refresh() {
+    online().then(function (ok) {
+      if (ok) { status("Checking for edits"); loadFresh(); }
+      else { status("Offline, kept current slides"); }
+    });
+  }
+
+  // First load
+  loadFresh();
+  setInterval(refresh, REFRESH_MINUTES * 60 * 1000);
+
+  // Daily full reload (only when online)
+  var pageLoadedAt = Date.now();
+  setInterval(function () {
+    var now = new Date();
+    var todaysReload = new Date(now.getFullYear(), now.getMonth(), now.getDate(), DAILY_RELOAD_HOUR).getTime();
+    // Reload once: only if it's past today's reload time and this page loaded before it.
+    if (now.getTime() >= todaysReload && pageLoadedAt < todaysReload) {
+      online().then(function (ok) { if (ok) location.reload(); });
+    }
+  }, 5 * 60 * 1000);
+</script>
+</body>
+</html>
