@@ -148,9 +148,26 @@
     });
   }
 
-  // First load
-  loadFresh();
+  // First load: after a power outage the stick boots before the Wi-Fi/internet is back.
+  // Wait until the internet is reachable (checking every 15 seconds), then load.
+  function firstLoad() {
+    online().then(function (ok) {
+      if (ok) {
+        status("Online, loading slides");
+        loadFresh();
+        // Two safety reloads in case the first one caught a half-ready connection.
+        setTimeout(refresh, 2 * 60 * 1000);
+        setTimeout(refresh, 5 * 60 * 1000);
+      } else {
+        status("Waiting for internet...");
+        setTimeout(firstLoad, 15000);
+      }
+    });
+  }
+  firstLoad();
   setInterval(refresh, REFRESH_MINUTES * 60 * 1000);
+  // When the Wi-Fi reconnects after a drop, reload right away.
+  window.addEventListener("online", function () { setTimeout(refresh, 5000); });
 
   // Daily full reload (only when online)
   var pageLoadedAt = Date.now();
